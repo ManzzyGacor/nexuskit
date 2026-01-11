@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel - NexusKit</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    /* Styling Khusus Admin Table */
+    .table-container { overflow-x: auto; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    th, td { padding: 15px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    th { color: var(--primary); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px; }
+    tr:hover { background: rgba(255,255,255,0.02); }
+    
+    /* Input Search & Select */
+    .search-box {
+      width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+      color: white; border-radius: 8px; margin-bottom: 20px;
+    }
+    .role-select {
+      background: #111; border: 1px solid #333; color: white; padding: 5px; border-radius: 4px;
+    }
+    .btn-small {
+      padding: 5px 10px; font-size: 0.8rem; margin-right: 5px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer;
+    }
+    .btn-small:hover { background: var(--primary); color: black; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="logo">ADMIN<span>PANEL</span></div>
+    <div>
+      <a href="index.html" class="btn" style="text-decoration:none; background:transparent; border:1px solid var(--border); color:white;">Kembali ke Home</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="glass-panel" style="max-width: 100%;">
+      <h2 style="margin-bottom: 10px;">Manajemen User</h2>
+      <p style="color:#aaa; margin-bottom: 20px;">Kelola role member dan atur masa aktif VIP.</p>
+      
+      <input type="text" id="searchInput" class="search-box" placeholder="Cari username..." onkeyup="filterUsers()">
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Role Saat Ini</th>
+              <th>Status Expired</th>
+              <th>Aksi Role</th>
+              <th>Aksi Durasi</th>
+            </tr>
+          </thead>
+          <tbody id="userTable">
+            <tr>
+              <td colspan="5" style="text-align:center;">Loading data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
