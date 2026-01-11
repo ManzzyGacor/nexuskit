@@ -1,27 +1,25 @@
-// --- KONFIGURASI SUPABASE ---
-const SUPABASE_URL = 'https://otqbggzzgpkpcdddbiho.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90cWJnZ3p6Z3BrcGNkZGRiaWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNDQ5MzYsImV4cCI6MjA4MzcyMDkzNn0.UxsI1NGPh4evgB-TzxyAa2NN_rY0HCYXULIh8NppV5o';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Import Supabase dari config pusat agar session terbaca
+import { supabase } from './config.js';
 
-// --- STATE ---
 let allUsers = [];
 
-// --- INIT ---
+// ==========================================
+// 1. INIT & CEK SECURITY
+// ==========================================
 window.onload = async () => {
-    await checkAdminAccess();
-    await fetchUsers();
-};
-
-// 1. Cek Security (Hanya Owner boleh masuk)
-async function checkAdminAccess() {
-    const { data: { user } } = await supabase.auth.getUser();
+    console.log("Admin Panel Loaded...");
     
-    if (!user) {
-        alert("Silahkan login dulu!");
-        window.location.href = 'index.html';
+    // Cek apakah ada user login?
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+        alert("⚠️ Anda belum login! Silahkan login dulu.");
+        window.location.href = 'login.html';
         return;
     }
 
+    // Cek apakah User ini OWNER?
+    const user = session.user;
     const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -29,12 +27,23 @@ async function checkAdminAccess() {
         .single();
 
     if (!profile || profile.role !== 'Owner') {
-        document.body.innerHTML = "<h1 style='color:white; text-align:center; margin-top:50px;'>⛔ AKSES DITOLAK: Anda bukan Owner.</h1>";
-        setTimeout(() => window.location.href = 'index.html', 2000);
+        document.body.innerHTML = `
+            <div style="display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; color:white;">
+                <h1 style="color:crimson; font-size:3rem;">⛔ AKSES DITOLAK</h1>
+                <p>Anda bukan Owner. Pergi sana!</p>
+                <a href="index.html" style="color:var(--primary); margin-top:20px;">Kembali ke Home</a>
+            </div>
+        `;
+        return;
     }
-}
 
-// 2. Ambil Semua Data User
+    // Jika Lolos semua, ambil data user
+    fetchUsers();
+};
+
+// ==========================================
+// 2. FETCH DATA USERS
+// ==========================================
 async function fetchUsers() {
     const { data, error } = await supabase
         .from('profiles')
@@ -42,128 +51,116 @@ async function fetchUsers() {
         .order('created_at', { ascending: false });
 
     if (error) {
-        alert("Gagal ambil data: " + error.message);
+        alert("Error Fetch: " + error.message);
     } else {
         allUsers = data;
         renderTable(allUsers);
     }
 }
 
-// 3. Render Tabel
+// ==========================================
+// 3. RENDER TABEL (Tampilan)
+// ==========================================
 function renderTable(users) {
     const tbody = document.getElementById('userTable');
+    if(!tbody) return;
     tbody.innerHTML = '';
 
     users.forEach(user => {
-        // Hitung sisa hari
+        // Hitung Sisa Hari
         let expiredText = "-";
-        let statusStyle = "color: #aaa;";
-        
+        let styleStatus = "color:#aaa";
+
         if (user.expired_at) {
-            const now = new Date();
-            const exp = new Date(user.expired_at);
-            const diffTime = exp - now;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays > 0) {
-                expiredText = `${diffDays} Hari Lagi`;
-                statusStyle = "color: #00f2ea;"; // Cyan
+            const daysLeft = Math.ceil((new Date(user.expired_at) - new Date()) / (1000 * 60 * 60 * 24));
+            if (daysLeft > 0) {
+                expiredText = `${daysLeft} Hari Lagi`;
+                styleStatus = "color:#00f2ea; font-weight:bold;";
             } else {
-                expiredText = "Expired";
-                statusStyle = "color: crimson;";
+                expiredText = "EXPIRED";
+                styleStatus = "color:crimson; font-weight:bold;";
             }
         }
 
-        const row = `
-            <tr>
-                <td>
-                    <b>${user.username || 'No Name'}</b><br>
-                    <span style="font-size:0.7rem; color:#666;">ID: ${user.id.substr(0,8)}...</span>
-                </td>
-                <td>
-                    <span class="badge ${user.role.toLowerCase()}" 
-                          style="padding: 2px 8px; border-radius:4px; border:1px solid #444;">
-                        ${user.role}
-                    </span>
-                </td>
-                <td style="${statusStyle}">${expiredText}</td>
-                <td>
-                    <select class="role-select" onchange="updateRole('${user.id}', this.value)">
-                        <option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option>
-                        <option value="VIP" ${user.role === 'VIP' ? 'selected' : ''}>VIP</option>
-                        <option value="VVIP" ${user.role === 'VVIP' ? 'selected' : ''}>VVIP</option>
-                        <option value="Owner" ${user.role === 'Owner' ? 'selected' : ''}>Owner</option>
-                    </select>
-                </td>
-                <td>
-                    <button class="btn-small" onclick="addDays('${user.id}', 30)">+30 Hari</button>
-                    <button class="btn-small" onclick="addDays('${user.id}', 7)">+7 Hari</button>
-                    <button class="btn-small" style="background:crimson;" onclick="resetExpired('${user.id}')">Reset</button>
-                </td>
-            </tr>
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <div style="font-weight:bold; color:white;">${user.username || 'No Name'}</div>
+                <div style="font-size:0.7rem; color:#666;">ID: ${user.id.substr(0,8)}...</div>
+            </td>
+            <td>
+                <span class="badge ${user.role.toLowerCase()}" style="padding:4px 8px; border:1px solid #444;">${user.role}</span>
+            </td>
+            <td style="${styleStatus}">${expiredText}</td>
+            <td>
+                <select class="role-select" id="role-${user.id}" style="background:#111; color:white; border:1px solid #333; padding:5px;">
+                    <option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option>
+                    <option value="VIP" ${user.role === 'VIP' ? 'selected' : ''}>VIP</option>
+                    <option value="VVIP" ${user.role === 'VVIP' ? 'selected' : ''}>VVIP</option>
+                    <option value="Owner" ${user.role === 'Owner' ? 'selected' : ''}>Owner</option>
+                </select>
+            </td>
+            <td>
+                <button class="btn-action" data-id="${user.id}" data-action="add30" style="background:#333; color:white; border:none; padding:5px; cursor:pointer;">+30 Hari</button>
+                <button class="btn-action" data-id="${user.id}" data-action="reset" style="background:crimson; color:white; border:none; padding:5px; cursor:pointer;">Reset</button>
+            </td>
         `;
-        tbody.innerHTML += row;
+        tbody.appendChild(tr);
+
+        // Event Listener untuk Select Role
+        document.getElementById(`role-${user.id}`).addEventListener('change', (e) => {
+            updateRole(user.id, e.target.value);
+        });
+    });
+
+    // Event Listener untuk Tombol Action (Pakai Delegation biar ringan)
+    document.querySelectorAll('.btn-action').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const uid = e.target.getAttribute('data-id');
+            const act = e.target.getAttribute('data-action');
+            if(act === 'add30') addDuration(uid, 30);
+            if(act === 'reset') resetExpired(uid);
+        });
     });
 }
 
-// 4. Update Role Database
-async function updateRole(userId, newRole) {
-    if(!confirm(`Ubah role user ini jadi ${newRole}?`)) return fetchUsers(); // Revert jika cancel
-
-    const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
-
-    if (error) alert("Gagal update: " + error.message);
-    else fetchUsers(); // Refresh tabel
-}
-
-// 5. Tambah Durasi Expired
-async function addDays(userId, days) {
-    // Cari user di data lokal dulu untuk ambil expired lama
-    const user = allUsers.find(u => u.id === userId);
-    let newExpDate = new Date();
-
-    if (user.expired_at && new Date(user.expired_at) > new Date()) {
-        // Jika belum expired, tambah dari tanggal expired terakhir
-        newExpDate = new Date(user.expired_at);
+// ==========================================
+// 4. DATABASE ACTIONS
+// ==========================================
+async function updateRole(uid, newRole) {
+    if(!confirm(`Ubah role user ini jadi ${newRole}?`)) {
+        fetchUsers(); return; 
     }
-    
-    // Tambah hari
-    newExpDate.setDate(newExpDate.getDate() + days);
-
-    const { error } = await supabase
-        .from('profiles')
-        .update({ expired_at: newExpDate.toISOString() })
-        .eq('id', userId);
-
-    if (error) alert("Gagal tambah hari: " + error.message);
-    else {
-        alert(`Berhasil tambah ${days} hari!`);
-        fetchUsers();
-    }
-}
-
-// 6. Reset Expired (Jadi null / Member biasa)
-async function resetExpired(userId) {
-    if(!confirm("Hapus masa aktif user ini?")) return;
-
-    const { error } = await supabase
-        .from('profiles')
-        .update({ expired_at: null })
-        .eq('id', userId);
-
-    if (error) alert("Gagal reset: " + error.message);
+    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', uid);
+    if(error) alert(error.message);
     else fetchUsers();
 }
 
-// 7. Filter Search
-function filterUsers() {
-    const term = document.getElementById('searchInput').value.toLowerCase();
-    const filtered = allUsers.filter(u => 
-        (u.username && u.username.toLowerCase().includes(term))
-    );
-    renderTable(filtered);
+async function addDuration(uid, days) {
+    const user = allUsers.find(u => u.id === uid);
+    let newDate = new Date();
+    
+    // Jika masih aktif, tambah dari tanggal expired terakhir
+    if(user.expired_at && new Date(user.expired_at) > new Date()) {
+        newDate = new Date(user.expired_at);
+    }
+    newDate.setDate(newDate.getDate() + days);
+
+    const { error } = await supabase.from('profiles').update({ expired_at: newDate.toISOString() }).eq('id', uid);
+    if(error) alert(error.message);
+    else { alert(`Berhasil tambah ${days} hari!`); fetchUsers(); }
 }
 
+async function resetExpired(uid) {
+    if(!confirm("Hapus masa aktif user ini?")) return;
+    const { error } = await supabase.from('profiles').update({ expired_at: null }).eq('id', uid);
+    if(error) alert(error.message);
+    else fetchUsers();
+}
+
+// Global Filter Function
+window.filterUsers = function() {
+    const term = document.getElementById('searchInput').value.toLowerCase();
+    const filtered = allUsers.filter(u => u.username && u.username.toLowerCase().includes(term));
+    renderTable(filtered);
+}

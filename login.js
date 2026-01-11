@@ -1,11 +1,6 @@
-import { createClient } from 'https://unpkg.com/@supabase/supabase-js@2?module'
+import { supabase } from './config.js'; // <-- Import dari pusat
 
-// --- KONFIGURASI SUPABASE ---
-const SUPABASE_URL = 'https://otqbggzzgpkpcdddbiho.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90cWJnZ3p6Z3BrcGNkZGRiaWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNDQ5MzYsImV4cCI6MjA4MzcyMDkzNn0.UxsI1NGPh4evgB-TzxyAa2NN_rY0HCYXULIh8NppV5o';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// --- DOM ELEMENTS ---
+// DOM Elements
 const emailInput = document.getElementById('email');
 const passInput = document.getElementById('password');
 const userInput = document.getElementById('username');
@@ -17,17 +12,10 @@ const errorMsg = document.getElementById('error-msg');
 
 let isLoginMode = true;
 
-// --- EVENT LISTENERS ---
-switchBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    toggleMode();
-});
+// Event Listeners
+if(switchBtn) switchBtn.addEventListener('click', (e) => { e.preventDefault(); toggleMode(); });
+if(submitBtn) submitBtn.addEventListener('click', handleAuth);
 
-submitBtn.addEventListener('click', async () => {
-    await handleAuth();
-});
-
-// --- FUNCTIONS ---
 function toggleMode() {
     isLoginMode = !isLoginMode;
     errorMsg.style.display = 'none';
@@ -37,26 +25,22 @@ function toggleMode() {
         submitBtn.innerText = "Masuk Sekarang";
         switchText.innerText = "Belum punya akun?";
         switchBtn.innerText = "Daftar Disini";
-        userInput.classList.add('hidden');
+        if(userInput) userInput.classList.add('hidden');
     } else {
         formTitle.innerText = "Daftar Akun Baru";
         submitBtn.innerText = "Daftar Sekarang";
         switchText.innerText = "Sudah punya akun?";
         switchBtn.innerText = "Login Disini";
-        userInput.classList.remove('hidden');
+        if(userInput) userInput.classList.remove('hidden');
     }
 }
 
 async function handleAuth() {
     const email = emailInput.value;
     const password = passInput.value;
-    const username = userInput.value;
+    const username = userInput ? userInput.value : '';
 
-    // Validasi Sederhana
-    if (!email || !password) {
-        showError("Email dan Password wajib diisi!");
-        return;
-    }
+    if (!email || !password) return showError("Email & Password wajib diisi!");
 
     submitBtn.innerText = "Loading...";
     submitBtn.disabled = true;
@@ -64,45 +48,25 @@ async function handleAuth() {
 
     try {
         if (isLoginMode) {
-            // --- LOGIKA LOGIN ---
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
-
+            // LOGIN
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
-
-            // Sukses Login -> Redirect ke Index
+            // SUKSES -> PINDAH KE INDEX
             window.location.href = "index.html";
-
         } else {
-            // --- LOGIKA DAFTAR ---
-            if (!username) {
-                showError("Username wajib diisi!");
-                submitBtn.disabled = false;
-                submitBtn.innerText = "Daftar Sekarang";
-                return;
-            }
-
-            const { data, error } = await supabase.auth.signUp({
-                email: email,
-                password: password,
-                options: {
-                    data: { username: username } // Simpan username ke metadata
-                }
+            // DAFTAR
+            if (!username) throw new Error("Username wajib diisi!");
+            const { error } = await supabase.auth.signUp({
+                email, password, options: { data: { username } }
             });
-
             if (error) throw error;
-
-            alert("Pendaftaran Berhasil! Silakan Login.");
-            toggleMode(); // Kembali ke mode login
+            alert("Daftar berhasil! Silakan login.");
+            toggleMode();
         }
     } catch (err) {
         showError(err.message);
-    } finally {
-        if(isLoginMode) submitBtn.innerText = "Masuk Sekarang";
-        else submitBtn.innerText = "Daftar Sekarang";
         submitBtn.disabled = false;
+        submitBtn.innerText = isLoginMode ? "Masuk Sekarang" : "Daftar Sekarang";
     }
 }
 
@@ -110,4 +74,3 @@ function showError(msg) {
     errorMsg.innerText = msg;
     errorMsg.style.display = 'block';
 }
-

@@ -1,32 +1,42 @@
-import { createClient } from 'https://unpkg.com/@supabase/supabase-js@2?module'
+// Kita import supabase dari file config agar session nyambung dengan halaman login
+import { supabase } from './config.js';
 
-// --- KONFIGURASI SUPABASE ---
-// PASTIKAN URL DAN KEY SAMA PERSIS DENGAN YANG DI LOGIN.JS
-const SUPABASE_URL = 'https://otqbggzzgpkpcdddbiho.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90cWJnZ3p6Z3BrcGNkZGRiaWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNDQ5MzYsImV4cCI6MjA4MzcyMDkzNn0.UxsI1NGPh4evgB-TzxyAa2NN_rY0HCYXULIh8NppV5o';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// --- STATE ---
+// Variabel untuk menyimpan data user yang sedang login
 let currentUser = null;
 let userProfile = null;
 
-// --- AUTH LISTENER (Jantungnya Session) ---
-// Kode ini otomatis jalan setiap kali status login berubah (Login/Logout/Refresh)
-supabase.auth.onAuthStateChange(async (event, session) => {
-    console.log("Auth Event:", event); // Cek di Console Browser (F12)
+// ==========================================
+// 1. CEK STATUS LOGIN (SESSION)
+// ==========================================
+// Kode ini otomatis jalan saat website dibuka
+window.onload = async () => {
+    console.log("Website Memuat... Mengecek Session...");
+    await checkSession();
+};
 
-    if (session) {
-        currentUser = session.user;
-        await fetchUserProfile(currentUser.id);
-    } else {
-        currentUser = null;
-        userProfile = null;
-        renderTools(); // Render ulang tools dalam mode terkunci (Guest)
-        updateNavUI();
-    }
-});
+// Fungsi untuk mengecek apakah ada user yang login
+async function checkSession() {
+    // Cek session dari Supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // Listener: Kalau user login/logout di tab lain, otomatis update
+    supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            currentUser = session.user;
+            fetchUserProfile(currentUser.id); // Ambil data role/username
+        } else {
+            // Kalau logout / session habis
+            currentUser = null;
+            userProfile = null;
+            updateNavUI();   // Reset navbar jadi tombol login
+            renderTools();   // Reset tools jadi terkunci
+        }
+    });
+}
 
-// --- FUNGSI AMBIL DATA PROFILE ---
+// ==========================================
+// 2. AMBIL DATA PROFILE USER
+// ==========================================
 async function fetchUserProfile(userId) {
     try {
         const { data, error } = await supabase
@@ -36,182 +46,227 @@ async function fetchUserProfile(userId) {
             .single();
 
         if (error) {
-            console.warn("Profile belum siap/error:", error.message);
-            // Fallback sementara jika profile belum ke-create oleh Trigger
+            console.warn("Profile belum siap, menggunakan data sementara.");
+            // Fallback jika data belum ada di database (biar gak error)
             userProfile = { 
                 username: currentUser.email.split('@')[0], 
                 role: 'Member' 
-            }; 
+            };
         } else {
             userProfile = data;
         }
 
+        // Setelah data dapat, update tampilan website
         updateNavUI();
         renderTools();
 
     } catch (err) {
-        console.error("Gagal load profile:", err);
+        console.error("Gagal mengambil profile:", err);
     }
 }
 
-// --- UPDATE TAMPILAN NAVBAR ---
+// ==========================================
+// 3. UPDATE TAMPILAN NAVBAR
+// ==========================================
 function updateNavUI() {
     const navInfo = document.getElementById('user-info');
     const loginLink = document.getElementById('login-link');
 
+    // Jika User Sedang Login
     if (currentUser && navInfo) {
-        // Sembunyikan tombol Login
+        // 1. Sembunyikan tombol Login biasa
         if(loginLink) loginLink.style.display = 'none';
 
-        // Nama & Role (Pakai fallback jika profile null)
+        // 2. Siapkan data untuk ditampilkan
         const name = userProfile ? userProfile.username : 'User';
         const role = userProfile ? userProfile.role : 'Member';
 
-        // Tampilkan Profil User
+        // 3. Tampilkan Info User di Navbar
         navInfo.classList.remove('hidden');
         navInfo.innerHTML = `
             <div style="display:flex; align-items:center; gap:15px;">
-                <div style="text-align:right; line-height:1.2;">
-                    <span style="color:white; font-size:0.85rem; display:block;">Halo, <b style="color:var(--primary)">${name}</b></span>
+                <div style="text-align:right;">
+                    <span style="color:white; font-size:0.9rem; display:block;">Halo, <b style="color:var(--primary)">${name}</b></span>
                     <span class="badge ${role.toLowerCase()}" style="position:static; padding:2px 8px; font-size:0.65rem;">${role}</span>
                 </div>
-                <button id="logout-btn" style="background:rgba(220, 20, 60, 0.2); border:1px solid crimson; color:crimson; width:35px; height:35px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.3s;">
+                <button id="logout-btn" style="background:crimson; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold;">
                     <i class="fa-solid fa-power-off"></i>
                 </button>
             </div>
         `;
 
-        // Event Logout
+        // 4. Aktifkan Tombol Logout
         document.getElementById('logout-btn').addEventListener('click', async () => {
-            if(confirm("Yakin ingin logout?")) {
+            const confirmLogout = confirm("Apakah anda yakin ingin keluar akun?");
+            if(confirmLogout) {
                 await supabase.auth.signOut();
-                window.location.reload();
+                window.location.reload(); // Refresh halaman
             }
         });
+
     } else {
-        // Jika Guest, pastikan tombol Login muncul
-        if(loginLink) loginLink.style.display = 'block';
-        if(navInfo) navInfo.classList.add('hidden');
+        // Jika User Belum Login (Guest)
+        if(loginLink) loginLink.style.display = 'block'; // Munculkan tombol login
+        if(navInfo) navInfo.classList.add('hidden');     // Sembunyikan info user
     }
 }
 
-// --- RENDER TOOLS GRID ---
+// ==========================================
+// 4. DAFTAR TOOLS & RENDER
+// ==========================================
 const toolsDB = [
-    { id: 1, name: "Word Counter", role: "Member", desc: "Hitung kata standar.", icon: "📝" },
-    { id: 2, name: "VXZ Unban WA", role: "VIP", desc: "Buka blokir WA (Auto Email).", icon: "🔓" },
-    { id: 3, name: "Database Dumper", role: "VVIP", desc: "Dump SQL Database.", icon: "💾" },
-    { id: 4, name: "Admin Panel", role: "Owner", desc: "Kelola User.", icon: "👑" }
+    { id: 1, name: "Word Counter", role: "Member", desc: "Hitung jumlah kata dan karakter teks.", icon: "📝" },
+    { id: 2, name: "VXZ Unban WA", role: "VIP", desc: "Buka blokir WhatsApp (Auto Email).", icon: "🔓" },
+    { id: 3, name: "Database Dumper", role: "VVIP", desc: "Dump SQL Database Injection.", icon: "💾" },
+    { id: 4, name: "Admin Panel", role: "Owner", desc: "Kelola User dan Membership.", icon: "👑" }
 ];
 
 function renderTools() {
     const container = document.getElementById('tools-grid');
     if(!container) return;
-    container.innerHTML = '';
     
-    // Default Guest = Level 0
+    container.innerHTML = ''; // Bersihkan isi lama
+    
+    // Tentukan Level Role User
     const roles = { "Guest": 0, "Member": 1, "VIP": 2, "VVIP": 3, "Owner": 4 };
     const myRole = userProfile ? userProfile.role : "Guest";
-    const myRoleLvl = roles[myRole] || 0; 
+    const myLevel = roles[myRole] || 0; 
 
+    // Loop semua tools
     toolsDB.forEach(tool => {
-        const reqLvl = roles[tool.role];
-        const isLocked = myRoleLvl < reqLvl;
+        const requiredLevel = roles[tool.role];
+        const isLocked = myLevel < requiredLevel;
         
-        const lockIcon = isLocked ? '<i class="fa-solid fa-lock"></i>' : '<i class="fa-solid fa-rocket"></i>';
+        // Atur Tampilan Tombol (Terkunci vs Terbuka)
+        let btnContent = '';
+        let btnStyle = '';
         
-        // Style Tombol: Jika Locked warnanya gelap
-        const btnStyle = isLocked 
-            ? 'background:#1a1a1a; color:#555; border:1px solid #333; cursor:not-allowed;' 
-            : 'background:linear-gradient(90deg, var(--primary), #00a8a8); color:black; cursor:pointer; box-shadow:0 0 10px rgba(0,242,234,0.2);';
-            
-        const btnId = `tool-btn-${tool.id}`; 
-        const btnText = isLocked ? `Unlock ${tool.role}` : 'Buka Tool';
+        if (isLocked) {
+            btnContent = `<i class="fa-solid fa-lock"></i> &nbsp; Terkunci (${tool.role})`;
+            btnStyle = 'background:#222; color:#555; border:1px solid #333; cursor:not-allowed;';
+        } else {
+            btnContent = `Buka Tool 🚀`;
+            btnStyle = 'background:linear-gradient(90deg, var(--primary), #00a8a8); color:black; font-weight:bold; cursor:pointer; box-shadow:0 0 10px rgba(0,242,234,0.2);';
+        }
 
+        // Buat Elemen Kartu Tool
         const card = document.createElement('div');
         card.className = 'card';
-        // Tambahkan efek visual jika terkunci
-        if(isLocked) card.style.opacity = '0.7';
+        if(isLocked) card.style.opacity = '0.75'; // Agak transparan kalau terkunci
 
         card.innerHTML = `
-            <div class="badge ${tool.role.toLowerCase()}" style="top:10px; right:10px;">${tool.role}</div>
-            <div style="font-size:2.5rem; margin-bottom:15px; margin-top:10px;">${tool.icon}</div>
-            <h3 style="margin-bottom:5px; font-size:1.1rem;">${tool.name}</h3>
-            <p style="color:#777; font-size:0.85rem; margin-bottom:20px; line-height:1.4;">${tool.desc}</p>
-            <button id="${btnId}" class="btn" style="width:100%; font-size:0.85rem; padding:10px; ${btnStyle}">
-                ${lockIcon} &nbsp; ${btnText}
+            <div class="badge ${tool.role.toLowerCase()}" style="position:absolute; top:15px; right:15px;">${tool.role} Only</div>
+            <div style="font-size:2.5rem; margin-top:10px; margin-bottom:15px;">${tool.icon}</div>
+            <h3 style="margin-bottom:10px;">${tool.name}</h3>
+            <p style="color:#888; font-size:0.9rem; margin-bottom:20px; line-height:1.5;">${tool.desc}</p>
+            <button id="btn-tool-${tool.id}" class="btn" style="width:100%; padding:12px; border-radius:8px; ${btnStyle}">
+                ${btnContent}
             </button>
         `;
         container.appendChild(card);
 
-        // Event Listener: Hanya aktif jika TIDAK terkunci
-        if (!isLocked) {
-            document.getElementById(btnId).addEventListener('click', () => {
-                openTool(tool.id);
+        // Tambahkan Event Klik
+        const btnElement = document.getElementById(`btn-tool-${tool.id}`);
+        
+        if (isLocked) {
+            // Kalau terkunci, arahkan ke Pricing saat diklik
+            btnElement.addEventListener('click', () => {
+                alert(`Fitur ini khusus ${tool.role}. Silahkan upgrade akun anda!`);
+                window.location.href = '#pricing';
             });
         } else {
-            // Jika diklik saat terkunci -> Arahkan ke Pricing
-            document.getElementById(btnId).addEventListener('click', () => {
-                window.location.href = '#pricing';
+            // Kalau terbuka, jalankan fungsinya
+            btnElement.addEventListener('click', () => {
+                openTool(tool.id);
             });
         }
     });
 }
 
-// --- LOGIC BUKA TOOL ---
+// ==========================================
+// 5. LOGIKA MEMBUKA TOOL
+// ==========================================
 function openTool(toolId) {
     const activeArea = document.getElementById('active-tool-area');
     activeArea.classList.remove('hidden');
-    activeArea.innerHTML = ''; 
-
+    activeArea.innerHTML = ''; // Reset area
+    
+    // Tool ID 2: VXZ Unban WA
     if (toolId === 2) {
-        // VXZ UNBAN WA Logic
+        // Cek apakah script unban.js sudah termuat
         if(typeof renderUnbanUI === 'function') {
             activeArea.innerHTML = renderUnbanUI();
-            window.scrollTo({ top: 120, behavior: 'smooth' }); // Auto scroll ke tool
-            if(typeof initUnbanLogic === 'function') initUnbanLogic();
+            
+            // Scroll otomatis ke area tool agar user sadar tool sudah terbuka
+            const yOffset = -100; 
+            const y = activeArea.getBoundingClientRect().top + window.pageYOffset + yOffset;
+            window.scrollTo({top: y, behavior: 'smooth'});
+
+            // Jalankan logika unban (tombol kirim, dll)
+            if(typeof initUnbanLogic === 'function') {
+                initUnbanLogic();
+            }
         } else {
-            activeArea.innerHTML = "<h3 style='text-align:center; padding:20px;'>⚠️ Script unban.js belum termuat!</h3>";
+            activeArea.innerHTML = "<h3 style='text-align:center; padding:20px; color:red;'>⚠️ Error: Script unban.js belum termuat di halaman ini.</h3>";
         }
-    } else if (toolId === 4) {
+    } 
+    // Tool ID 4: Admin Panel
+    else if (toolId === 4) {
         window.location.href = 'admin.html';
-    } else {
-        // Placeholder tool lain
+    } 
+    // Tool Lainnya (Placeholder)
+    else {
         activeArea.innerHTML = `
-            <div class="glass-panel text-center" style="padding:40px;">
-                <h1 style="font-size:3rem;">🚧</h1>
-                <h2 style="color:var(--primary); margin:10px 0;">Tool Sedang Maintenance</h2>
-                <p>Fitur ini sedang dalam perbaikan oleh Manzzy ID.</p>
-                <button onclick="document.getElementById('active-tool-area').classList.add('hidden')" class="btn" style="margin-top:20px; background:#333; color:white;">Tutup</button>
+            <div class="glass-panel text-center" style="padding:50px;">
+                <h1 style="font-size:3rem; margin-bottom:20px;">🚧</h1>
+                <h2 style="color:var(--primary); margin-bottom:10px;">Tool Sedang Maintenance</h2>
+                <p>Fitur ini sedang dalam perbaikan dan pengembangan oleh Developer.</p>
+                <button onclick="document.getElementById('active-tool-area').classList.add('hidden')" class="btn" style="margin-top:20px; background:#333; color:white;">Tutup Tool</button>
             </div>
         `;
-        window.scrollTo({ top: 120, behavior: 'smooth' });
+        window.scrollTo({ top: 150, behavior: 'smooth' });
     }
 }
 
-// --- ORDER WHATSAPP LOGIC ---
+// ==========================================
+// 6. LOGIKA PEMBELIAN ROLE (WHATSAPP)
+// ==========================================
+// Fungsi ini dipanggil dari tombol "Beli VIP" di index.html
 window.purchaseRole = function(plan, price) {
+    // 1. Cek Login Dulu
     if (!currentUser) {
-        if(confirm("Anda harus Login dulu untuk upgrade akun. Mau login sekarang?")) {
+        const confirmLogin = confirm("Maaf, anda harus Login atau Daftar terlebih dahulu untuk membeli paket membership. Menuju halaman login?");
+        if(confirmLogin) {
             window.location.href = 'login.html';
         }
         return;
     }
 
-    // GANTI NOMOR WA OWNER
-    const ownerPhone = "6281234567890"; 
+    // 2. Data Owner
+    const ownerPhone = "6287756632352"; // GANTI DENGAN NOMOR WA KAMU (Format 628xxx)
     
+    // 3. Ambil data user saat ini
+    const username = userProfile ? userProfile.username : 'User Baru';
+    const email = currentUser.email;
+
+    // 4. Format Pesan WhatsApp (Lengkap & Profesional)
     const text = `
-*ORDER UPGRADE NEXUSKIT* 🚀
-Halo Admin Manzzy ID!
+*ORDER UPGRADE MEMBERSHIP* 🚀
+Halo Admin Manzzy ID, saya ingin melakukan upgrade akun.
 
-👤 User: ${userProfile ? userProfile.username : currentUser.email}
-📧 Email: ${currentUser.email}
-💎 Plan: *${plan}*
-💰 Harga: Rp ${price}
+📋 *DETAIL PESANAN:*
+━━━━━━━━━━━━━━━━━━
+👤 *Username* : ${username}
+📧 *Email* : ${email}
+💎 *Paket* : ${plan}
+💰 *Harga* : Rp ${price}
+━━━━━━━━━━━━━━━━━━
 
-Mohon info pembayaran Qris/E-Wallet. Terima kasih!
+Mohon informasikan metode pembayarannya (QRIS / DANA / GOPAY).
+Terima kasih!
     `.trim();
 
+    // 5. Buka WhatsApp
     const url = `https://wa.me/${ownerPhone}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
 }
