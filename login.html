@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Manzzy ID</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    /* Style khusus agar form ada di tengah layar */
+    body { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .auth-container { width: 100%; max-width: 400px; padding: 20px; }
+    .glass-panel { padding: 40px; border-radius: 20px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px); }
+  </style>
+</head>
+<body>
+
+  <div class="auth-container">
+    <div class="glass-panel text-center">
+      <h2 class="logo" style="margin-bottom: 30px;">MANZZY<span style="color:var(--primary)">ID</span></h2>
+      
+      <h3 id="form-title" style="margin-bottom: 20px; color:white;">Login Member</h3>
+
+      <div id="error-msg" style="color:crimson; font-size:0.9rem; margin-bottom:10px; display:none;">Error message here</div>
+      
+      <input type="email" id="email" placeholder="Email Address" required>
+      <input type="text" id="username" placeholder="Username (Untuk Daftar)" class="hidden">
+      <input type="password" id="password" placeholder="Password" required>
+      
+      <button class="btn" id="submit-btn" style="width:100%; margin-top:20px; border-radius:10px;">Masuk Sekarang</button>
+      
+      <p style="margin-top: 20px; font-size: 0.9rem; color: #888;">
+        <span id="switch-text">Belum punya akun?</span> 
+        <a href="#" id="switch-btn" style="color: var(--primary); text-decoration:none; font-weight:bold;">Daftar Disini</a>
+      </p>
+
+      <a href="index.html" style="display:block; margin-top:30px; color:#555; font-size:0.8rem; text-decoration:none;">&larr; Kembali ke Beranda</a>
+    </div>
+  </div>
+
+  <script type="module" src="login.js"></script>
+</body>
+</html>
