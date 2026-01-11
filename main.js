@@ -7,6 +7,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // --- STATE ---
 let currentUser = null;
 let userProfile = null;
+let isLoginMode = true; // Default mode login
 
 // --- TOOLS DATA ---
 const toolsDB = [
@@ -18,14 +19,15 @@ const toolsDB = [
 
 // --- INITIALIZATION ---
 window.onload = async () => {
-    checkSession();
+    console.log("Website Loaded. Checking Session...");
+    await checkSession();
 };
 
 async function checkSession() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
         currentUser = session.user;
-        // Ambil Profile & Role dari tabel 'profiles'
+        // Ambil Profile & Role
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -41,145 +43,179 @@ async function checkSession() {
 // --- UI RENDERING ---
 function renderTools() {
     const container = document.getElementById('tools-grid');
+    if(!container) return; // Guard clause
     container.innerHTML = '';
     
     // Hirarki Role
     const roles = { "Member": 1, "VIP": 2, "VVIP": 3, "Owner": 4 };
-    const myRoleLvl = userProfile ? roles[userProfile.role] : 0; // 0 kalau belum login
+    const myRoleLvl = userProfile ? roles[userProfile.role] : 0; 
 
     toolsDB.forEach(tool => {
         const reqLvl = roles[tool.role];
         const isLocked = myRoleLvl < reqLvl;
         
+        // Cek icon status
+        const lockIcon = isLocked ? '<i class="fa-solid fa-lock"></i>' : '<i class="fa-solid fa-rocket"></i>';
+        const btnClass = isLocked ? 'background:#222; color:#555; cursor:not-allowed;' : '';
+        const btnAction = isLocked ? '' : `onclick="openTool(${tool.id})"`;
+        const btnText = isLocked ? 'Terkunci' : 'Buka Tool';
+
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
             <div class="badge ${tool.role.toLowerCase()}">${tool.role} Only</div>
-            <div style="font-size:3rem; margin-bottom:10px;">${tool.icon}</div>
-            <h3>${tool.name}</h3>
-            <p style="color:#aaa; font-size:0.9rem;">${tool.desc}</p>
-            <br>
-            ${isLocked 
-                ? `<button class="btn" style="background:#333; color:#666; cursor:not-allowed;">Terkunci 🔒</button>` 
-                : `<button class="btn" onclick="openTool(${tool.id})">Buka Tool 🚀</button>`
-            }
+            <div style="font-size:3rem; margin-bottom:15px;">${tool.icon}</div>
+            <h3 style="margin-bottom:10px;">${tool.name}</h3>
+            <p style="color:#888; font-size:0.9rem; margin-bottom:20px;">${tool.desc}</p>
+            <button class="btn" style="width:100%; ${btnClass}" ${btnAction}>${lockIcon} ${btnText}</button>
         `;
         container.appendChild(card);
     });
 }
 
 function updateNavUI() {
-    const nav = document.getElementById('user-info');
-    if (userProfile) {
-        nav.innerHTML = `
-            <span style="margin-right:15px;">Halo, <b>${userProfile.username}</b> [${userProfile.role}]</span>
-            <button class="btn" onclick="handleLogout()" style="background:crimson; box-shadow:none;">Logout</button>
+    const navInfo = document.getElementById('user-info');
+    const navLinks = document.querySelector('.nav-links'); // Container tombol login
+
+    if (userProfile && navInfo) {
+        // Tampilkan Info User & Sembunyikan Tombol Login di Navbar
+        navInfo.classList.remove('hidden');
+        navInfo.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="color:white; font-size:0.9rem;">Hai, <b style="color:var(--primary)">${userProfile.username}</b></span>
+                <span class="badge ${userProfile.role.toLowerCase()}" style="position:static; margin:0;">${userProfile.role}</span>
+                <button onclick="handleLogout()" style="background:crimson; border:none; color:white; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:0.8rem;"><i class="fa-solid fa-power-off"></i></button>
+            </div>
         `;
+        
+        // Sembunyikan tombol login di menu
+        const loginBtn = document.querySelector("a[onclick*='showAuthModal']");
+        if(loginBtn) loginBtn.style.display = 'none';
     }
 }
 
-// ... kode sebelumnya ...
-
+// --- TOOL LOGIC ---
 function openTool(toolId) {
     const activeArea = document.getElementById('active-tool-area');
     activeArea.classList.remove('hidden');
-    activeArea.innerHTML = ''; // Reset
+    activeArea.innerHTML = ''; 
 
-    // Logika menampilkan tool spesifik
     if (toolId === 2) {
-        // Render UI
-        activeArea.innerHTML = renderUnbanUI();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        // --- PENTING: PANGGIL LOGIC DISINI ---
-        initUnbanLogic(); 
-
+        // VXZ UNBAN WA
+        // Pastikan renderUnbanUI dari unban.js sudah tersedia
+        if(typeof renderUnbanUI === 'function') {
+            activeArea.innerHTML = renderUnbanUI();
+            window.scrollTo({ top: 100, behavior: 'smooth' }); // Scroll sedikit ke bawah
+            // Panggil logic
+            if(typeof initUnbanLogic === 'function') initUnbanLogic();
+        } else {
+            activeArea.innerHTML = "<h3 style='text-align:center; color:red;'>Error: Script unban.js belum termuat.</h3>";
+        }
     } else if (toolId === 4) {
-        activeArea.innerHTML = `<h2>Admin Panel belum dibuat di demo ini.</h2>`;
+        window.location.href = 'admin.html';
     } else {
-        activeArea.innerHTML = `<h2>Tool ${toolId} Terbuka! (Placeholder)</h2>`;
+        activeArea.innerHTML = `<div class="card text-center"><h2>🚧 Tool ${toolId} Sedang Maintenance</h2><button class="btn" onclick="this.parentElement.parentElement.classList.add('hidden')" style="margin-top:20px;">Tutup</button></div>`;
     }
 }
 
-// ... kode setelahnya ...
-
-// --- AUTH LOGIC (SUPABASE) ---
-let isLoginMode = true;
-
+// --- AUTH FUNCTIONS ---
 function showAuthModal(mode) {
-    document.getElementById('auth-modal').classList.remove('hidden');
+    const modal = document.getElementById('auth-modal');
+    if(modal) modal.classList.remove('hidden');
+    
+    // Reset form state
+    isLoginMode = true; 
+    updateAuthModalUI();
 }
 
 function closeAuthModal() {
-    document.getElementById('auth-modal').classList.add('hidden');
+    const modal = document.getElementById('auth-modal');
+    if(modal) modal.classList.add('hidden');
 }
 
 function switchAuthMode() {
     isLoginMode = !isLoginMode;
+    updateAuthModalUI();
+}
+
+function updateAuthModalUI() {
     const title = document.getElementById('auth-title');
     const btn = document.getElementById('auth-btn');
     const userField = document.getElementById('username');
     const switchText = document.getElementById('auth-switch-text');
+    const switchLink = document.querySelector("#auth-modal a");
 
     if (isLoginMode) {
-        title.innerText = "Login";
-        btn.innerText = "Masuk";
+        title.innerText = "Login Member";
+        btn.innerText = "Masuk Sekarang";
         userField.classList.add('hidden');
         switchText.innerText = "Belum punya akun?";
+        switchLink.innerText = "Daftar Disini";
     } else {
-        title.innerText = "Daftar Member";
-        btn.innerText = "Daftar";
+        title.innerText = "Daftar Baru";
+        btn.innerText = "Daftar Akun";
         userField.classList.remove('hidden');
         switchText.innerText = "Sudah punya akun?";
+        switchLink.innerText = "Login Disini";
     }
 }
 
 async function handleLogin() {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
-    const username = document.getElementById('username').value; // Cuma dipakai saat daftar
+    const username = document.getElementById('username').value;
 
-    if (!email || !password) return alert("Isi email dan password!");
+    if (!email || !password) return alert("Email & Password wajib diisi!");
+
+    const btn = document.getElementById('auth-btn');
+    btn.innerText = "Loading...";
+    btn.disabled = true;
 
     try {
         if (isLoginMode) {
             // LOGIN
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
             location.reload();
         } else {
             // DAFTAR
-            if (!username) return alert("Isi username!");
+            if (!username) {
+                btn.disabled = false;
+                return alert("Username wajib diisi untuk pendaftaran!");
+            }
             
-            // Simpan username di metadata agar bisa diambil trigger SQL
-            const { error } = await supabase.auth.signUp({
+            const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
-                options: {
-                    data: { username: username }
-                }
+                options: { data: { username: username } }
             });
             if (error) throw error;
-            alert("Pendaftaran berhasil! Silakan cek email untuk verifikasi (jika aktif) atau langsung login.");
-            switchAuthMode();
+            
+            alert("Berhasil Daftar! Cek email untuk verifikasi (jika aktif) atau coba login.");
+            isLoginMode = true;
+            updateAuthModalUI();
         }
     } catch (err) {
-        alert("Error: " + err.message);
+        alert("Gagal: " + err.message);
+    } finally {
+        btn.innerText = isLoginMode ? "Masuk Sekarang" : "Daftar Akun";
+        btn.disabled = false;
     }
 }
 
-// ... (Kode main.js sebelumnya di atas sini) ...
+async function handleLogout() {
+    await supabase.auth.signOut();
+    location.reload();
+}
 
-// --- PAYMENT / ORDER LOGIC ---
 function purchaseRole(plan, price) {
     if (!currentUser) {
-        alert("Silahkan Login atau Daftar terlebih dahulu untuk membeli paket!");
+        alert("Eits! Login dulu bosku sebelum beli paket.");
         showAuthModal('login');
         return;
     }
 
-    // GANTI NOMOR WA OWNER DISINI (Format: 628xxx)
-    const ownerPhone = "6281234567890"; 
+    const ownerPhone = "6281234567890"; // GANTI NOMOR WA KAMU DISINI
     
     const text = `
 Halo Admin Manzzy ID! 👋
@@ -191,14 +227,18 @@ Email: ${currentUser.email}
 Plan: ${plan}
 Harga: Rp ${price}
 
-Mohon info metode pembayarannya (Qris/Dana/Gopay). Terima kasih!
+Mohon info pembayaran.
     `.trim();
 
-    const url = `https://wa.me/${ownerPhone}?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    window.open(`https://wa.me/${ownerPhone}?text=${encodeURIComponent(text)}`, '_blank');
 }
 
-async function handleLogout() {
-    await supabase.auth.signOut();
-    location.reload();
-}
+// --- PENTING: EXPOSE KE GLOBAL (WINDOW) ---
+// Ini yang bikin tombol di HTML bisa baca fungsi di file ini
+window.showAuthModal = showAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.switchAuthMode = switchAuthMode;
+window.handleLogin = handleLogin;
+window.handleLogout = handleLogout;
+window.openTool = openTool;
+window.purchaseRole = purchaseRole;
