@@ -110,9 +110,40 @@ input:focus { border-color: var(--primary); }
 footer { border-top: 1px solid var(--glass-border); padding: 60px 0 30px; margin-top: 100px; background: rgba(0,0,0,0.5); }
 .footer-content { text-align: center; }
 
-/* Responsive */
+/* --- RESPONSIVE MOBILE FIX --- */
 @media (max-width: 768px) {
-  .hero h1 { font-size: 2.5rem; }
+  /* Navbar di HP jadi susun ke bawah */
+  nav { 
+    padding: 15px; 
+    flex-direction: column; 
+    gap: 15px; 
+    background: rgba(0,0,0,0.9); /* Lebih gelap biar tulisan jelas */
+  }
+  
+  .logo { font-size: 1.2rem; }
+
+  /* TAMPILKAN MENU (Jangan di-hide) */
+  .nav-links { 
+    display: flex; 
+    gap: 20px; 
+    justify-content: center;
+    width: 100%;
+    background: #111;
+    padding: 10px;
+    border-radius: 50px;
+    border: 1px solid #333;
+  }
+  
+  .nav-links a { 
+    margin-left: 0; 
+    font-size: 0.85rem;
+    font-weight: bold;
+  }
+
+  /* Hero Section */
+  .hero { padding: 80px 20px; }
+  .hero h1 { font-size: 2.2rem; }
+  
+  /* Pricing Card */
   .card.popular { transform: scale(1); margin: 20px 0; }
-  .nav-links { display: none; } /* Simpel hide for mobile demo */
 }
